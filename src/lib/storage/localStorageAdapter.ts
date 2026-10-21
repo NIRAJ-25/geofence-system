@@ -6,135 +6,8 @@ const GEOFENCES_KEY = 'geofence_app_geofences_v1';
 const EVENTS_KEY = 'geofence_app_events_v1';
 const SETTINGS_KEY = 'geofence_app_settings_v1';
 
-const INITIAL_SEEDS: Geofence[] = [
-  {
-    id: 'geo-1',
-    name: 'National Art & History Museum',
-    description: 'High-security cultural gallery. Cameras, video capture, and microphone recording are strictly restricted inside.',
-    latitude: 37.7749,
-    longitude: -122.4194,
-    radius: 120,
-    enabled: true,
-    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-    updatedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-    color: '#ef4444', // Red (Security)
-    enterNotification: true,
-    exitNotification: true,
-    dwellEnabled: true,
-    dwellDuration: 15,
-    status: 'OUTSIDE',
-    zoneType: 'SECURITY',
-    securityPolicies: {
-      disableCamera: true,
-      disableMicrophone: true,
-      zoneLabel: 'Restricted Museum Photography & Audio Zone'
-    }
-  },
-  {
-    id: 'geo-2',
-    name: 'Grand Expressway Junction',
-    description: 'Major traffic bottleneck with active traffic incident and alternate route advisories.',
-    latitude: 37.7770,
-    longitude: -122.4170,
-    radius: 220,
-    enabled: true,
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    updatedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    color: '#f59e0b', // Amber (Incident)
-    enterNotification: true,
-    exitNotification: true,
-    dwellEnabled: false,
-    dwellDuration: 10,
-    status: 'OUTSIDE',
-    zoneType: 'INCIDENT',
-    incidentDetails: {
-      headline: 'Major 3-Vehicle Collision & Gridlock on Highway Connector',
-      severity: 'CRITICAL',
-      delayMinutes: 35,
-      alternateRoute: 'Divert via Lincoln Parkway / South Loop Arterial to save 25 minutes.',
-      newsSummary: 'Traffic authority reports heavy lane obstruction. Emergency personnel clearing debris. Alternate route strongly recommended.'
-    }
-  },
-  {
-    id: 'geo-3',
-    name: 'Downtown Commercial & Amenities Hub',
-    description: 'Central hub with hospitals, cafes, 5-star hotels, EV gas stations, shopping malls, theatres, and specialty stores.',
-    latitude: 37.7738,
-    longitude: -122.4210,
-    radius: 280,
-    enabled: true,
-    createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
-    updatedAt: new Date(Date.now() - 86400000 * 1).toISOString(),
-    color: '#3b82f6', // Blue (Amenities)
-    enterNotification: true,
-    exitNotification: true,
-    dwellEnabled: true,
-    dwellDuration: 20,
-    status: 'OUTSIDE',
-    zoneType: 'AMENITY',
-    amenityHighlights: ['St. Jude Hospital', 'Apex City Galleria', 'Shell Ultra Gas & EV', 'Blue Bottle Coffee', 'Grand Imperial Hotel']
-  },
-  {
-    id: 'geo-4',
-    name: 'University Examination Complex',
-    description: 'Academic Hall. Zero camera or microphone recording permitted to prevent examination malpractice.',
-    latitude: 37.7725,
-    longitude: -122.4180,
-    radius: 100,
-    enabled: true,
-    createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
-    updatedAt: new Date(Date.now() - 86400000 * 1).toISOString(),
-    color: '#dc2626', // Red (Security)
-    enterNotification: true,
-    exitNotification: true,
-    dwellEnabled: false,
-    dwellDuration: 10,
-    status: 'OUTSIDE',
-    zoneType: 'SECURITY',
-    securityPolicies: {
-      disableCamera: true,
-      disableMicrophone: true,
-      zoneLabel: 'Exam Center Anti-Malpractice Perimeter'
-    }
-  }
-];
-
-const INITIAL_EVENTS: GeofenceEvent[] = [
-  {
-    id: 'ev-1',
-    geofenceId: 'geo-1',
-    geofenceName: 'University Innovation Lab',
-    eventType: 'ENTER',
-    timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-    latitude: 37.77485,
-    longitude: -122.41935,
-    distanceFromCenter: 24,
-    accuracy: 12
-  },
-  {
-    id: 'ev-2',
-    geofenceId: 'geo-1',
-    geofenceName: 'University Innovation Lab',
-    eventType: 'DWELL',
-    timestamp: new Date(Date.now() - 3600000 * 1.5).toISOString(),
-    latitude: 37.77490,
-    longitude: -122.41940,
-    distanceFromCenter: 15,
-    accuracy: 8,
-    dwellDurationMinutes: 15
-  },
-  {
-    id: 'ev-3',
-    geofenceId: 'geo-1',
-    geofenceName: 'University Innovation Lab',
-    eventType: 'EXIT',
-    timestamp: new Date(Date.now() - 3600000 * 1).toISOString(),
-    latitude: 37.7770,
-    longitude: -122.4180,
-    distanceFromCenter: 180,
-    accuracy: 15
-  }
-];
+const LEGACY_DEMO_GEOFENCE_IDS = new Set(['geo-1', 'geo-2', 'geo-3', 'geo-4']);
+const LEGACY_DEMO_EVENT_IDS = new Set(['ev-1', 'ev-2', 'ev-3']);
 
 const DEFAULT_SETTINGS: AppSettings = {
   defaultRadius: 100,
@@ -152,16 +25,26 @@ export class LocalStorageGeofenceRepository implements IGeofenceRepository {
   }
 
   public async getAll(): Promise<Geofence[]> {
-    if (!this.isClient()) return INITIAL_SEEDS;
+    if (!this.isClient()) return [];
     try {
       const data = localStorage.getItem(GEOFENCES_KEY);
       if (!data) {
-        localStorage.setItem(GEOFENCES_KEY, JSON.stringify(INITIAL_SEEDS));
-        return INITIAL_SEEDS;
+        return [];
       }
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      // Purge any legacy demo geofences (geo-1, geo-2, geo-3, geo-4)
+      const clean = parsed.filter(
+        (g) => g && typeof g.id === 'string' && !LEGACY_DEMO_GEOFENCE_IDS.has(g.id)
+      );
+      if (clean.length !== parsed.length) {
+        localStorage.setItem(GEOFENCES_KEY, JSON.stringify(clean));
+      }
+      return clean;
     } catch {
-      return INITIAL_SEEDS;
+      return [];
     }
   }
 
@@ -242,19 +125,31 @@ export class LocalStorageEventRepository implements IEventRepository {
   public async getAll(filter?: EventFilter): Promise<GeofenceEvent[]> {
     let events: GeofenceEvent[] = [];
     if (!this.isClient()) {
-      events = INITIAL_EVENTS;
-    } else {
-      try {
-        const data = localStorage.getItem(EVENTS_KEY);
-        if (!data) {
-          localStorage.setItem(EVENTS_KEY, JSON.stringify(INITIAL_EVENTS));
-          events = INITIAL_EVENTS;
-        } else {
-          events = JSON.parse(data);
-        }
-      } catch {
-        events = INITIAL_EVENTS;
+      return [];
+    }
+    try {
+      const data = localStorage.getItem(EVENTS_KEY);
+      if (!data) {
+        return [];
       }
+      const parsed = JSON.parse(data);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      // Purge any legacy demo events
+      const clean = parsed.filter(
+        (ev) =>
+          ev &&
+          typeof ev.id === 'string' &&
+          !LEGACY_DEMO_EVENT_IDS.has(ev.id) &&
+          !LEGACY_DEMO_GEOFENCE_IDS.has(ev.geofenceId)
+      );
+      if (clean.length !== parsed.length) {
+        localStorage.setItem(EVENTS_KEY, JSON.stringify(clean));
+      }
+      events = clean;
+    } catch {
+      events = [];
     }
 
     if (!filter) return events;

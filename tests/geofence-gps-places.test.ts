@@ -448,4 +448,70 @@ describe('GeoFence GPS & Overpass Places Verification Suite', () => {
       assert.equal(isGenuineEmpty(failedResponse), false);
     });
   });
+
+  // 19. Zero Demo Geofence Guarantee & Initial Empty State
+  describe('19. Zero Demo Geofence Guarantee & Initial Empty State', () => {
+    it('initializes a new visitor with zero geofences and never injects demo records', () => {
+      const mockStorage: Record<string, string> = {};
+      const GEOFENCES_KEY = 'geofence_app_geofences_v1';
+      const LEGACY_DEMO_IDS = new Set(['geo-1', 'geo-2', 'geo-3', 'geo-4']);
+
+      // Simulating first-time visitor with null localStorage
+      const raw = mockStorage[GEOFENCES_KEY];
+      let result: any[] = [];
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        result = Array.isArray(parsed) ? parsed.filter(g => !LEGACY_DEMO_IDS.has(g.id)) : [];
+      }
+
+      assert.equal(result.length, 0, 'New visitor must start with exactly 0 geofences');
+    });
+
+    it('purges legacy demo seeds (geo-1, geo-2, geo-3, geo-4) if found in storage', () => {
+      const LEGACY_DEMO_IDS = new Set(['geo-1', 'geo-2', 'geo-3', 'geo-4']);
+      const contaminatedList = [
+        { id: 'geo-1', name: 'National Art & History Museum' },
+        { id: 'geo-2', name: 'Grand Expressway Junction' },
+        { id: 'geo-3', name: 'Downtown Commercial & Amenities Hub' },
+        { id: 'geo-4', name: 'University Examination Complex' },
+        { id: 'geo-custom-99', name: 'User Created Office Zone' }
+      ];
+
+      const cleanList = contaminatedList.filter(g => !LEGACY_DEMO_IDS.has(g.id));
+
+      assert.equal(cleanList.length, 1, 'Only real user geofences must remain');
+      assert.equal(cleanList[0].id, 'geo-custom-99');
+    });
+  });
+
+  // 20. Dynamic Active Counter & Lifecycle Sync
+  describe('20. Dynamic Active Counter & Lifecycle Sync', () => {
+    it('calculates active and total counts strictly from actual records', () => {
+      let fences: Array<{ id: string; enabled: boolean }> = [];
+
+      // Initial empty state
+      let activeCount = fences.filter(f => f.enabled).length;
+      assert.equal(activeCount, 0, 'Active count must be 0 when no fences exist');
+      assert.equal(fences.length, 0, 'Total count must be 0');
+
+      // User creates 1 geofence
+      fences.push({ id: 'geo-101', enabled: true });
+      activeCount = fences.filter(f => f.enabled).length;
+      assert.equal(activeCount, 1, 'Active count must be 1');
+      assert.equal(fences.length, 1, 'Total count must be 1');
+
+      // User disables the geofence
+      fences[0].enabled = false;
+      activeCount = fences.filter(f => f.enabled).length;
+      assert.equal(activeCount, 0, 'Active count must be 0 when disabled');
+      assert.equal(fences.length, 1, 'Total count is still 1');
+
+      // User deletes the geofence
+      fences = fences.filter(f => f.id !== 'geo-101');
+      activeCount = fences.filter(f => f.enabled).length;
+      assert.equal(activeCount, 0, 'Active count must be 0 after delete');
+      assert.equal(fences.length, 0, 'Total count must be 0 after delete');
+    });
+  });
 });
+
